@@ -329,6 +329,15 @@ function App() {
           {error && <span className="error">{error}</span>}
         </div>
 
+        {loading && (
+          <div className="loading-container">
+            <div className="loading-bar">
+              <div className="loading-bar-progress"></div>
+            </div>
+            <div className="loading-text">Searching...</div>
+          </div>
+        )}
+
         <div className="results">
           {results.map((item, idx) => (
             <article

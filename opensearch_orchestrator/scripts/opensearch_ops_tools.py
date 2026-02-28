@@ -3589,8 +3589,10 @@ def _resolve_semantic_runtime_hints(
         vector_field = preferred[0]
 
     default_pipeline = ""
+    search_pipeline = ""
     model_id = ""
     source_field = ""
+    has_agentic_pipeline = False
 
     try:
         settings_response = opensearch_client.indices.get_settings(index=index_name)
@@ -3598,8 +3600,25 @@ def _resolve_semantic_runtime_hints(
         default_pipeline = _normalize_text(
             index_settings.get("settings", {}).get("index", {}).get("default_pipeline", "")
         )
+        search_pipeline = _normalize_text(
+            index_settings.get("settings", {}).get("index", {}).get("search", {}).get("default_pipeline", "")
+        )
     except Exception:
         default_pipeline = ""
+        search_pipeline = ""
+
+    # Check if search pipeline is agentic
+    if search_pipeline:
+        try:
+            pipeline_response = opensearch_client.transport.perform_request("GET", f"/_search/pipeline/{search_pipeline}")
+            pipeline = pipeline_response.get(search_pipeline, {})
+            request_processors = pipeline.get("request_processors", [])
+            for processor in request_processors:
+                if isinstance(processor, dict) and "agentic_query_translator" in processor:
+                    has_agentic_pipeline = True
+                    break
+        except Exception:
+            pass
 
     if default_pipeline:
         try:
@@ -3641,6 +3660,8 @@ def _resolve_semantic_runtime_hints(
         "vector_field": vector_field,
         "model_id": model_id,
         "default_pipeline": default_pipeline,
+        "search_pipeline": search_pipeline,
+        "has_agentic_pipeline": str(has_agentic_pipeline).lower(),
         "source_field": source_field,
     }
 
@@ -3833,9 +3854,72 @@ def _search_ui_search(
         runtime_hints = _resolve_semantic_runtime_hints(opensearch_client, index_name, field_specs)
         vector_field = runtime_hints.get("vector_field", "")
         model_id = runtime_hints.get("model_id", "")
+        has_agentic_pipeline = runtime_hints.get("has_agentic_pipeline", "false") == "true"
         semantic_ready = bool(vector_field and model_id)
         lexical_query = _build_default_lexical_query(query=query, fields=lexical_fields)
         manual_structured_clauses: list[dict[str, object]] | None = None
+
+        # Check if this is an agentic search query (multi-step question)
+        if has_agentic_pipeline and capability == "manual":
+            # Detect multi-step questions that should use agentic search
+            query_lower = query.lower()
+            agentic_indicators = [
+                " and ",
+                " or ",
+                "why",
+                "how",
+                "what are",
+                "show me",
+                "find",
+                "compare",
+                "top",
+                "best",
+                "under",
+                "over",
+                "between",
+                "?",
+            ]
+            if any(indicator in query_lower for indicator in agentic_indicators):
+                # Use agentic search - just do a simple search, the pipeline will handle query translation
+                executed_body = {
+                    "size": size,
+                    "query": {
+                        "match": {
+                            "_all": query
+                        }
+                    }
+                }
+                query_mode = "agentic_search"
+                capability = "agentic"
+                used_semantic = True
+                
+                try:
+                    response = opensearch_client.search(index=index_name, body=executed_body)
+                    hits_out: list[dict] = []
+                    for hit in response.get("hits", {}).get("hits", []):
+                        source = hit.get("_source", {})
+                        hits_out.append(
+                            {
+                                "id": hit.get("_id"),
+                                "score": hit.get("_score"),
+                                "preview": _search_ui_preview_text(source),
+                                "source": source,
+                            }
+                        )
+                    return {
+                        "error": "",
+                        "hits": hits_out,
+                        "total": response.get("hits", {}).get("total", {}).get("value", len(hits_out)),
+                        "took_ms": response.get("took", 0),
+                        "query_mode": query_mode,
+                        "capability": capability,
+                        "used_semantic": used_semantic,
+                        "fallback_reason": fallback_reason,
+                        **({"query_body": executed_body} if debug else {}),
+                    }
+                except Exception as e:
+                    fallback_reason = f"agentic search failed: {e}"
+                    # Fall through to regular search logic
 
         if capability == "manual":
             manual_structured_clauses, _ = _parse_structured_clauses(
@@ -5647,3 +5731,322 @@ def cleanup_docs(index_name: str = "", doc_ids: str = "") -> str:
 
     summary = {"deleted_docs": deleted_count, "errors": errors}
     return json.dumps(summary, ensure_ascii=False)
+
+
+def create_bedrock_agentic_model(
+    model_name: str = "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    role_arn: str = ""
+) -> str:
+    """Create a Bedrock Claude model for agentic search with the specified configuration.
+    
+    Args:
+        model_name: The Bedrock Claude model ID. Defaults to Claude 4 Sonnet.
+        role_arn: AWS IAM role ARN with Bedrock permissions. If not provided, uses AWS credentials from environment.
+        
+    Returns:
+        str: The model ID of the created and deployed model, or error message.
+    """
+    # Validate model is a Claude model for agentic search
+    if "claude" not in model_name.lower():
+        return "Error: Agentic search requires a Claude model (e.g., us.anthropic.claude-sonnet-4-20250514-v1:0)."
+    
+    region = os.getenv("AWS_REGION", "us-east-1")
+    
+    # Build credential configuration
+    credential_config = {}
+    if role_arn and role_arn.strip():
+        # Use IAM role ARN (for managed OpenSearch)
+        credential_config = {"roleArn": role_arn.strip()}
+    else:
+        # Use AWS credentials from environment (for self-managed)
+        access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        session_token = os.getenv("AWS_SESSION_TOKEN")
+
+        if not access_key or not secret_key:
+            return "Error: Either role_arn or AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are required."
+
+        credential_config = {
+            "access_key": access_key,
+            "secret_key": secret_key
+        }
+        if session_token:
+            credential_config["session_token"] = session_token
+
+    # Use single-step register with deploy=true (simpler and more reliable)
+    register_body = {
+        "name": f"agentic-search-model-{int(time.time())}",
+        "function_name": "remote",
+        "connector": {
+            "name": f"Bedrock Claude 4 Sonnet Connector {int(time.time())}",
+            "description": "Amazon Bedrock connector for Claude 4 Sonnet - Agentic Search",
+            "version": 1,
+            "protocol": "aws_sigv4",
+            "parameters": {
+                "region": region,
+                "service_name": "bedrock",
+                "model": model_name
+            },
+            "credential": credential_config,
+            "actions": [
+                {
+                    "action_type": "predict",
+                    "method": "POST",
+                    "url": f"https://bedrock-runtime.{region}.amazonaws.com/model/{model_name}/converse",
+                    "headers": {
+                        "content-type": "application/json"
+                    },
+                    "request_body": '{ "system": [{"text": "${parameters.system_prompt}"}], "messages": [${parameters._chat_history:-}{"role":"user","content":[{"text":"${parameters.user_prompt}"}]}${parameters._interactions:-}]${parameters.tool_configs:-} }'
+                }
+            ]
+        }
+    }
+    
+    try:
+        opensearch_client = _create_client()
+        set_ml_settings(opensearch_client)
+        
+        # Single-step register and deploy
+        response = opensearch_client.transport.perform_request(
+            "POST", 
+            "/_plugins/_ml/models/_register?deploy=true", 
+            body=register_body
+        )
+        
+        model_id = response.get("model_id") or response.get("modelId")
+        if not model_id:
+            return f"Model registration failed - no model_id returned: {response}"
+        
+        print(f"Agentic model '{model_name}' (ID: {model_id}) registered and deployed successfully.")
+        return model_id
+
+    except Exception as e:
+        return f"Error creating Bedrock agentic model: {e}"
+
+
+def create_agentic_search_conversational_agent(
+    agent_name: str,
+    model_id: str,
+    max_iterations: int = 10
+) -> str:
+    """Create a conversational agentic search agent with memory and multiple tools.
+    
+    Conversational agents support:
+    - Multi-turn conversations with memory
+    - Multiple tools (ListIndex, IndexMapping, WebSearch, QueryPlanning)
+    - Detailed reasoning traces
+    - Higher latency and cost
+    
+    Args:
+        agent_name: Name for the agent (e.g., "my-conversational-agent").
+        model_id: The deployed LLM model ID from create_bedrock_agentic_model.
+        max_iterations: Maximum LLM iterations for query planning. Defaults to 10.
+        
+    Returns:
+        str: The agent ID of the created agent, or error message.
+    """
+    if not model_id or not model_id.strip():
+        return "Error: model_id is required. Use create_bedrock_agentic_model first."
+    
+    try:
+        opensearch_client = _create_client()
+        
+        agent_body = {
+            "name": agent_name,
+            "type": "conversational",
+            "description": f"Conversational agentic search agent with memory for multi-turn queries",
+            "llm": {
+                "model_id": model_id,
+                "parameters": {
+                    "max_iteration": max_iterations
+                }
+            },
+            "tools": [
+                {
+                    "type": "ListIndexTool",
+                    "name": "ListIndexTool"
+                },
+                {
+                    "type": "IndexMappingTool",
+                    "name": "IndexMappingTool"
+                },
+                {
+                    "type": "WebSearchTool",
+                    "name": "DuckduckgoWebSearchTool",
+                    "parameters": {
+                        "engine": "duckduckgo"
+                    }
+                },
+                {
+                    "type": "QueryPlanningTool",
+                    "name": "QueryPlanningTool"
+                }
+            ],
+            "memory": {
+                "type": "conversation_index"
+            },
+            "app_type": "os_chat",
+            "parameters": {
+                "_llm_interface": "bedrock/converse/claude"
+            }
+        }
+        
+        response = opensearch_client.transport.perform_request(
+            "POST",
+            "/_plugins/_ml/agents/_register",
+            body=agent_body
+        )
+        
+        agent_id = response.get("agent_id")
+        if not agent_id:
+            return f"Failed to create conversational agent: {response}"
+        
+        print(f"Conversational agentic search agent created: {agent_id}")
+        return f"Conversational agent '{agent_name}' (ID: {agent_id}) created successfully."
+
+    except Exception as e:
+        return f"Error creating conversational agentic search agent: {e}"
+
+
+def create_agentic_search_flow_agent(
+    agent_name: str,
+    model_id: str
+) -> str:
+    """Create a flow agentic search agent for stateless query planning.
+    
+    Flow agents are optimized for:
+    - Single-turn stateless queries
+    - Lower latency (fewer LLM calls)
+    - Lower cost
+    - Query planning with IndexMappingTool and QueryPlanningTool
+    
+    Args:
+        agent_name: Name for the agent (e.g., "my-flow-agent").
+        model_id: The deployed LLM model ID from create_bedrock_agentic_model.
+        
+    Returns:
+        str: The agent ID of the created agent, or error message.
+    """
+    if not model_id or not model_id.strip():
+        return "Error: model_id is required. Use create_bedrock_agentic_model first."
+    
+    try:
+        opensearch_client = _create_client()
+        
+        agent_body = {
+            "name": agent_name,
+            "type": "flow",
+            "description": "Flow agent for agentic search with index mapping awareness",
+            "tools": [
+                {
+                    "type": "IndexMappingTool",
+                    "name": "IndexMappingTool"
+                },
+                {
+                    "type": "QueryPlanningTool",
+                    "parameters": {
+                        "model_id": model_id,
+                        "response_filter": "$.output.message.content[0].text"
+                    }
+                }
+            ]
+        }
+        
+        response = opensearch_client.transport.perform_request(
+            "POST",
+            "/_plugins/_ml/agents/_register",
+            body=agent_body
+        )
+        
+        agent_id = response.get("agent_id")
+        if not agent_id:
+            return f"Failed to create flow agent: {response}"
+        
+        print(f"Flow agentic search agent created: {agent_id}")
+        return f"Flow agent '{agent_name}' (ID: {agent_id}) created successfully."
+
+    except Exception as e:
+        return f"Error creating flow agentic search agent: {e}"
+
+
+def create_agentic_search_agent(
+    agent_name: str,
+    model_id: str,
+    agent_type: str = "conversational",
+    max_iterations: int = 10
+) -> str:
+    """Create an agentic search agent with query planning capabilities.
+    
+    DEPRECATED: Use create_agentic_search_conversational_agent() or create_agentic_search_flow_agent() instead.
+    
+    Args:
+        agent_name: Name for the agent (e.g., "my-search-agent").
+        model_id: The deployed LLM model ID from create_bedrock_agentic_model.
+        agent_type: Agent type - "conversational" (with memory) or "flow" (stateless). Defaults to conversational.
+        max_iterations: Maximum LLM iterations for query planning. Defaults to 10.
+        
+    Returns:
+        str: The agent ID of the created agent, or error message.
+    """
+    if agent_type == "flow":
+        return create_agentic_search_flow_agent(agent_name, model_id)
+    else:
+        return create_agentic_search_conversational_agent(agent_name, model_id, max_iterations)
+
+
+def create_agentic_search_pipeline(
+    pipeline_name: str,
+    agent_id: str,
+    index_name: str,
+    replace_if_exists: bool = True
+) -> str:
+    """Create and attach an agentic search pipeline to an index.
+    
+    This creates a search pipeline with:
+    - Request processor: agentic_query_translator (translates natural language to DSL)
+    - Response processor: agentic_context (includes agent reasoning and generated DSL)
+    
+    Args:
+        pipeline_name: Name for the search pipeline (e.g., "my-agentic-pipeline").
+        agent_id: The agent ID from create_agentic_search_agent.
+        index_name: The index to attach the pipeline to.
+        replace_if_exists: Delete and recreate pipeline if it already exists. Defaults to True.
+        
+    Returns:
+        str: Success message or error.
+    """
+    if not agent_id or not agent_id.strip():
+        return "Error: agent_id is required. Use create_agentic_search_agent first."
+    
+    if not index_name or not index_name.strip():
+        return "Error: index_name is required."
+    
+    # Create search pipeline with agentic processors
+    pipeline_body = {
+        "request_processors": [
+            {
+                "agentic_query_translator": {
+                    "agent_id": agent_id
+                }
+            }
+        ],
+        "response_processors": [
+            {
+                "agentic_context": {
+                    "agent_steps_summary": True,
+                    "dsl_query": True
+                }
+            }
+        ]
+    }
+    
+    # Use the standard create_and_attach_pipeline function
+    return create_and_attach_pipeline(
+        pipeline_name=pipeline_name,
+        pipeline_body=pipeline_body,
+        index_name=index_name,
+        pipeline_type="search",
+        replace_if_exists=replace_if_exists,
+        is_hybrid_search=False,
+        hybrid_weights=None
+    )

@@ -4,6 +4,7 @@ import re
 
 from strands import Agent, tool
 from strands.models import BedrockModel
+<<<<<<< HEAD:opensearch_orchestrator/opensearch_qa_assistant.py
 if __package__ in {None, ""}:
     from pathlib import Path
     import sys
@@ -14,6 +15,10 @@ if __package__ in {None, ""}:
 
 from opensearch_orchestrator.scripts.handler import ThinkingCallbackHandler
 from opensearch_orchestrator.scripts.tools import read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, search_opensearch_org
+=======
+from scripts.handler import ThinkingCallbackHandler
+from scripts.tools import read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, read_agentic_search_guide, search_opensearch_org
+>>>>>>> f802391 (Add agentic search support):opensearch_qa_assistant.py
 
 # -------------------------------------------------------------------------
 # System Prompt
@@ -23,12 +28,12 @@ SYSTEM_PROMPT = """
 # OpenSearch QA Assistant
 
 You are an OpenSearch QA assistant.
-Your goal is to answer questions related to OpenSearch semantic search.
+Your goal is to answer questions related to OpenSearch semantic search and agentic search.
 
 ## Responsibilities
 
 1. **Understand the Question**
-2. **Consult the Knowledge Base**: Use `read_knowledge_base`, `read_dense_vector_models`, or `read_sparse_vector_models` to check for specific details based on the topic.
+2. **Consult the Knowledge Base**: Use `read_knowledge_base`, `read_dense_vector_models`, `read_sparse_vector_models`, or `read_agentic_search_guide` to check for specific details based on the topic.
 3. **Use Live Docs Search When Needed**: Use `search_opensearch_org` for the latest public docs on opensearch.org.
 4. **Provide the Answer**: Offer a brief answer based on available tool evidence.
 
@@ -56,7 +61,7 @@ model = BedrockModel(
 agent = Agent(
     model=model, 
     system_prompt=SYSTEM_PROMPT,
-    tools=[read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, search_opensearch_org],
+    tools=[read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, read_agentic_search_guide, search_opensearch_org],
     callback_handler=ThinkingCallbackHandler(output_color="\033[96m") # Cyan output for follow-up
 )
 

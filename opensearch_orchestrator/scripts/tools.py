@@ -138,6 +138,21 @@ def read_sparse_vector_models() -> str:
         return f"Error reading sparse vector models guide: {e}"
 
 
+def read_agentic_search_guide() -> str:
+    """Read the Agentic Search Guide to retrieve information about natural language query translation.
+
+    Returns:
+        str: The content of the guide covering agentic search setup, agent types, latency/cost profiles, and when to use agentic search as a query translation layer.
+    """
+    try:
+        filename = "scripts/knowledge/agentic_search_guide.md"
+        with open(filename, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading agentic search guide: {e}"
+        return f"Error reading sparse vector models guide: {e}"
+
+
 
 def submit_sample_doc(doc: str) -> str:
     """Parse a sample document provided by the user.

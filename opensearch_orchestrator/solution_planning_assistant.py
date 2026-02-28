@@ -19,6 +19,7 @@ from opensearch_orchestrator.scripts.tools import (
     read_knowledge_base,
     read_dense_vector_models,
     read_sparse_vector_models,
+    read_agentic_search_guide
     search_opensearch_org,
 )
 from opensearch_orchestrator.scripts.shared import (
@@ -37,11 +38,28 @@ SYSTEM_PROMPT = """
 # OpenSearch Search Architecture Assistant
 
 You are an expert OpenSearch search architect and solution consultant.
-Your goal is to collaborate with the user to design the best OpenSearch retrieval strategy for the stated use case (BM25 / dense / sparse / hybrid).
+Your goal is to collaborate with the user to design the best OpenSearch retrieval strategy for the stated use case.
+
+## Available Search Approaches
+
+**Retrieval Methods**: Choose ONE based on use case:
+1. **BM25** (lexical) - Exact keyword matching
+2. **Dense Vector** (semantic) - Semantic similarity
+3. **Sparse Vector** (semantic) - Semantic with term expansion
+4. **Hybrid** (combination) - Combines multiple methods (e.g., BM25 + Dense)
+5. **Agentic Search** (multi-step reasoning) - For multi-step questions requiring answer synthesis
+   - Use `read_agentic_search_guide()` when context includes multi-step question requirements
+   - Agentic search handles query decomposition, retrieval, and answer synthesis internally
+   - Use when users expect synthesized answers, not just ranked documents
 
 ## Your Responsibilities
 
-1.  **Analyze & Propose**: Based on the initial context, analyze the requirements and propose a technical solution using `read_knowledge_base` and other tools.
+1.  **Analyze & Propose**: 
+    *   Based on the initial context, analyze the requirements and propose a technical solution.
+    *   If context includes multi-step question requirements, call `read_agentic_search_guide()` to evaluate if agentic search is appropriate.
+    *   Choose ONE retrieval method: BM25, Dense Vector, Sparse Vector, Hybrid, or Agentic Search.
+    *   For multi-step reasoning cases, recommend Agentic Search as the standalone retrieval method.
+    *   For other cases, use `read_knowledge_base` and other tools to determine the appropriate retrieval method.
 2.  **Consult & Refine**: 
     *   Present your proposal and ask for explicit user confirmation to proceed.
         Use one short confirmation prompt only; do not ask additional checklist questions.
@@ -52,7 +70,7 @@ Your goal is to collaborate with the user to design the best OpenSearch retrieva
     *   Finalize with the required XML output only after the user explicitly confirms proceeding.
 
 ## Tools & Knowledge
-*   Use `read_knowledge_base`, `read_dense_vector_models`, and `read_sparse_vector_models` as your primary source of truth.
+*   Use `read_knowledge_base`, `read_dense_vector_models`, `read_sparse_vector_models`, and `read_agentic_search_guide` as your primary source of truth.
 *   Use `search_opensearch_org` when you need latest public OpenSearch documentation updates from opensearch.org.
 *   Do not fabricate benchmarks or capabilities not present in the tools.
 
@@ -155,11 +173,16 @@ Structure:
 
 <planning_complete>
     <solution>
-        - Retrieval Method (e.g., lexical BM25, structured filtering/aggregations, or hybrid with dense + sparse)
-        - Hybrid Weight Profile: semantic-heavy|balanced|lexical-heavy (required only when retrieval is hybrid lexical+semantic)
-        - Algorithm/Engine (include when vector retrieval is used; otherwise mark as not required)
-        - Model Deployment (include when semantic retrieval is used; otherwise mark as not required)
-        - Specific Model IDs (include only when semantic retrieval is used)
+        - Retrieval Method: [BM25 | Dense Vector | Sparse Vector | Hybrid | Agentic Search]
+        - If Agentic Search:
+          * Agentic Model: Bedrock Claude 4 Sonnet or compatible LLM
+          * Agent Type: conversational or flow
+        - If Hybrid (not Agentic):
+          * Hybrid Weight Profile: semantic-heavy|balanced|lexical-heavy
+        - If Dense/Sparse Vector (not Agentic):
+          * Algorithm/Engine: HNSW, IVF, etc.
+          * Model Deployment: OpenSearch Node, SageMaker, or External API
+          * Specific Model IDs: model names
     </solution>
     <search_capabilities>
         - Exact: ...
@@ -580,7 +603,7 @@ def _create_planner_agent() -> Agent:
     return Agent(
         model=_get_model(),
         system_prompt=SYSTEM_PROMPT,
-        tools=[tool(read_knowledge_base), tool(read_dense_vector_models), tool(read_sparse_vector_models), tool(search_opensearch_org)],
+        tools=[tool(read_knowledge_base), tool(read_dense_vector_models), tool(read_sparse_vector_models), tool(read_agentic_search_guide), tool(search_opensearch_org)],
         callback_handler=ThinkingCallbackHandler(output_color="\033[94m"),  # Blue output
     )
 
@@ -697,7 +720,10 @@ def solution_planning_assistant(context: str) -> dict:
                     }
                 capability_ids = _extract_canonical_capability_ids(search_capabilities)
 
-                if search_capabilities and capability_ids:
+                # Skip capability verification for Agentic Search (handles capabilities internally)
+                is_agentic_search = "agentic search" in solution.lower()
+                
+                if search_capabilities and capability_ids and not is_agentic_search:
                     capability_block_for_precheck = (
                         "## Search Capabilities\n"
                         f"{search_capabilities}\n"
@@ -769,6 +795,14 @@ def solution_planning_assistant(context: str) -> dict:
                             "Planner capability precheck found no applicable canonical capabilities after retry. "
                             f"Precheck feedback: {precheck_feedback}"
                         ),
+                    }
+                
+                # For Agentic Search or when no capability verification needed, return directly
+                elif is_agentic_search or not capability_ids:
+                    return {
+                        "solution": solution,
+                        "search_capabilities": search_capabilities,
+                        "keynote": keynote,
                     }
 
                 if finalization_retry_count < finalization_retry_limit:
