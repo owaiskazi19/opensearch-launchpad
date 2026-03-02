@@ -115,6 +115,11 @@ Your goal is to guide the user from initial requirements to a finalized, execute
         `User requirement: Multi-step natural language queries requiring answer synthesis (e.g., "[user's example]")`
         Agentic search is a standalone retrieval method for multi-step reasoning cases.
         Do NOT try to solve this yourself - let the solution_planning_assistant determine if agentic search is needed.
+    *   **AWS Credentials for Agentic Search**: If the solution_planning_assistant returns a solution that includes agentic search as the retrieval method, you MUST collect AWS credentials before calling worker_agent:
+        - Ask the user to provide AWS credentials (Access Key ID, Secret Access Key, Region, and optionally Session Token)
+        - Call `submit_agentic_aws_credentials` with the provided credentials
+        - These credentials will be used exclusively for creating the Bedrock agentic model (not for the orchestrator itself)
+        - Only proceed to call worker_agent after credentials are successfully stored
     *   **Natural-Language / Concept Search Scope**: Use semantic query-pattern preference to determine emphasis.
         If query pattern is semantic-dominant, treat natural-language/concept retrieval as a primary requirement.
         Do NOT ask a separate yes/no confirmation question.
@@ -229,6 +234,10 @@ class SessionState:
     localhost_auth_mode: str = _LOCALHOST_AUTH_MODE_DEFAULT
     localhost_auth_username: str | None = None
     localhost_auth_password: str | None = None
+    agentic_aws_access_key: str | None = None
+    agentic_aws_secret_key: str | None = None
+    agentic_aws_session_token: str | None = None
+    agentic_aws_region: str | None = None
 
 _NUMERIC_STRING_PATTERN = re.compile(r"[+-]?\d+(\.\d+)?")
 _DATEISH_STRING_PATTERN = re.compile(
@@ -1035,6 +1044,39 @@ def _orchestrator_submit_sample_doc(state: SessionState, doc: str) -> str:
     return result
 
 
+def _orchestrator_submit_agentic_aws_credentials(
+    state: SessionState,
+    access_key: str,
+    secret_key: str,
+    region: str = "us-east-1",
+    session_token: str = ""
+) -> str:
+    """Store AWS credentials for agentic search Bedrock model deployment.
+    
+    Args:
+        access_key: AWS Access Key ID
+        secret_key: AWS Secret Access Key
+        region: AWS region (default: us-east-1)
+        session_token: AWS Session Token (optional, for temporary credentials)
+        
+    Returns:
+        str: Success message or error
+    """
+    if not access_key or not access_key.strip():
+        return "Error: AWS Access Key ID is required."
+    if not secret_key or not secret_key.strip():
+        return "Error: AWS Secret Access Key is required."
+    if not region or not region.strip():
+        return "Error: AWS region is required."
+    
+    state.agentic_aws_access_key = access_key.strip()
+    state.agentic_aws_secret_key = secret_key.strip()
+    state.agentic_aws_region = region.strip()
+    state.agentic_aws_session_token = session_token.strip() if session_token else None
+    
+    return f"AWS credentials for agentic search stored successfully (region: {state.agentic_aws_region})."
+
+
 def _extract_sample_doc_from_state(sample_doc_json: str | None) -> dict | None:
     raw = str(sample_doc_json or "").strip()
     if not raw:
@@ -1095,14 +1137,54 @@ def _augment_worker_context_with_source(state: SessionState, context: str) -> st
     return augmented
 
 
+def _mask_credentials_in_text(text: str, state: SessionState) -> str:
+    """Mask AWS credentials in text output to prevent exposure in logs."""
+    if not text:
+        return text
+    
+    masked_text = text
+    
+    # Mask access key
+    if state.agentic_aws_access_key:
+        masked_text = masked_text.replace(state.agentic_aws_access_key, "[REDACTED_ACCESS_KEY]")
+    
+    # Mask secret key
+    if state.agentic_aws_secret_key:
+        masked_text = masked_text.replace(state.agentic_aws_secret_key, "[REDACTED_SECRET_KEY]")
+    
+    # Mask session token
+    if state.agentic_aws_session_token:
+        masked_text = masked_text.replace(state.agentic_aws_session_token, "[REDACTED_SESSION_TOKEN]")
+    
+    return masked_text
+
+
 def _run_worker_agent_with_state(state: SessionState, context: str) -> str:
     worker_context = _augment_worker_context_with_source(state, context)
+    
+    # Add AWS credentials for agentic search to context if present
+    if state.agentic_aws_access_key and state.agentic_aws_secret_key:
+        # Add credentials to context (will be masked in output)
+        aws_creds_note = (
+            f"\n\n[AGENTIC SEARCH AWS CREDENTIALS]\n"
+            f"Use create_bedrock_agentic_model_with_creds() with these parameters:\n"
+            f"- access_key: {state.agentic_aws_access_key}\n"
+            f"- secret_key: {state.agentic_aws_secret_key}\n"
+            f"- region: {state.agentic_aws_region or 'us-east-1'}"
+        )
+        if state.agentic_aws_session_token:
+            aws_creds_note += f"\n- session_token: {state.agentic_aws_session_token}"
+        worker_context += aws_creds_note
+    
     if not state.source_index_name:
-        return worker_agent_impl(worker_context)
-
-    mode, username, password = _resolve_localhost_auth_from_state(state)
-    with _temporary_localhost_auth_env(mode=mode, username=username, password=password):
-        return worker_agent_impl(worker_context)
+        result = worker_agent_impl(worker_context)
+    else:
+        mode, username, password = _resolve_localhost_auth_from_state(state)
+        with _temporary_localhost_auth_env(mode=mode, username=username, password=password):
+            result = worker_agent_impl(worker_context)
+    
+    # Mask credentials in the worker's response before returning
+    return _mask_credentials_in_text(result, state)
 
 
 # -------------------------------------------------------------------------
@@ -1309,6 +1391,17 @@ def _create_orchestrator_agent(state: SessionState) -> Agent:
     def submit_sample_doc(doc: str) -> str:
         return _orchestrator_submit_sample_doc(state, doc)
 
+    @tool(
+        name="submit_agentic_aws_credentials",
+        description=(
+            "Store AWS credentials for agentic search Bedrock model deployment. "
+            "Call this when the user selects agentic search as the retrieval method and needs to provide AWS credentials. "
+            "These credentials will be used exclusively for creating the Bedrock agentic model."
+        )
+    )
+    def submit_agentic_aws_credentials(access_key: str, secret_key: str, region: str = "us-east-1", session_token: str = "") -> str:
+        return _orchestrator_submit_agentic_aws_credentials(state, access_key, secret_key, region, session_token)
+
     def worker_agent(context: str) -> str:
         return _run_worker_agent_with_state(state, context)
 
@@ -1317,6 +1410,7 @@ def _create_orchestrator_agent(state: SessionState) -> Agent:
         system_prompt=SYSTEM_PROMPT,
         tools=[
             tool(submit_sample_doc),
+            tool(submit_agentic_aws_credentials),
             solution_planning_assistant,
             tool(worker_agent),
         ],

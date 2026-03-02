@@ -23,6 +23,7 @@ from opensearch_orchestrator.scripts.opensearch_ops_tools import (
     create_bedrock_embedding_model,
     create_local_pretrained_model,
     create_bedrock_agentic_model,
+    create_bedrock_agentic_model_with_creds,
     create_agentic_search_agent,
     create_agentic_search_conversational_agent,
     create_agentic_search_flow_agent,
@@ -54,10 +55,14 @@ Your goal is to execute the technical plan provided in the context.
 ## Your Responsibilities
 1.  **Analyze the Plan**: specific index settings, mappings, and configurations.
 2.  **Execute (in specific order)**:
-    *   **First**: Create necessary models (e.g., Bedrock embedding models, Local pretrained models).
+    *   **First**: Create necessary models (e.g., Bedrock embedding models, Local pretrained models, Bedrock agentic models).
     *   **Second**: Create the index with the correct settings and mappings.
     *   **Third**: Create the ingest pipeline and attach it to the index (this often requires models to be ready).
     *   **Third-A (Hybrid lexical+semantic only)**: Create and attach a search pipeline with normalization + combination weights for hybrid query score blending.
+    *   **Third-B (Agentic Search only)**: 
+        - Register Bedrock Claude 4 Sonnet model using `create_bedrock_agentic_model` with AWS credentials from context
+        - Create agentic search agent using `create_agentic_search_flow_agent` (flow type with IndexMappingTool + QueryPlanningTool)
+        - Create and attach agentic search pipeline using `create_agentic_search_pipeline`
     *   **Fourth (Capability + Verification)**: Call `apply_capability_driven_verification` using the full approved plan text and an explicit `index_name` (target index for this run). This step both parses `Search Capabilities` and indexes capability-selected verification docs. The result dict contains `suggestion_meta` — pass it to `set_search_ui_suggestions` (as JSON) with the same `index_name` before launching the UI.
     *   **Fifth (UX Handoff)**: Launch the custom React Search Builder UI using `launch_search_ui` so users can run queries immediately.
     *   **Sixth (Cleanup policy)**: Do NOT delete verification docs automatically. Keep them for user testing and clearly mention cleanup happens only when user explicitly asks.
@@ -80,6 +85,13 @@ Your goal is to execute the technical plan provided in the context.
     - Never use `nmslib` (deprecated).
     - For `hnsw`, prefer `lucene` unless the approved plan explicitly requires `faiss`.
     - For `ivf`, use `faiss`.
+12. For Agentic Search:
+    - AWS credentials (access_key, secret_key, session_token, region) are provided in the context
+    - Use `create_bedrock_agentic_model` to register and deploy the Bedrock model
+    - Use `create_agentic_search_flow_agent` to create the flow agent (NOT conversational agent in Phase 1)
+    - Use `create_agentic_search_pipeline` to create and attach the search pipeline
+    - Model ID: us.anthropic.claude-sonnet-4-20250514-v1:0
+    - Agent type: flow (with IndexMappingTool + QueryPlanningTool)
 
 ## Execution Report Contract (Required)
 At the end of your response, you MUST include an exact machine-readable block:
@@ -996,6 +1008,9 @@ def _run_worker_once(context: str) -> str:
             tool(apply_capability_driven_verification),
             tool(create_bedrock_embedding_model),
             tool(create_local_pretrained_model),
+            tool(create_bedrock_agentic_model_with_creds),
+            tool(create_agentic_search_flow_agent),
+            tool(create_agentic_search_pipeline),
             tool(launch_search_ui),
             tool(delete_doc),
             tool(set_search_ui_suggestions),

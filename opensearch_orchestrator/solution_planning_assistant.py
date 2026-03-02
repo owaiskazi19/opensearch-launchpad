@@ -19,7 +19,7 @@ from opensearch_orchestrator.scripts.tools import (
     read_knowledge_base,
     read_dense_vector_models,
     read_sparse_vector_models,
-    read_agentic_search_guide
+    read_agentic_search_guide,
     search_opensearch_org,
 )
 from opensearch_orchestrator.scripts.shared import (
@@ -47,10 +47,10 @@ Your goal is to collaborate with the user to design the best OpenSearch retrieva
 2. **Dense Vector** (semantic) - Semantic similarity
 3. **Sparse Vector** (semantic) - Semantic with term expansion
 4. **Hybrid** (combination) - Combines multiple methods (e.g., BM25 + Dense)
-5. **Agentic Search** (multi-step reasoning) - For multi-step questions requiring answer synthesis
-   - Use `read_agentic_search_guide()` when context includes multi-step question requirements
+5. **Agentic Search** (multi-step reasoning & conversational) - For multi-step questions, chatbots, conversational interfaces
    - Agentic search handles query decomposition, retrieval, and answer synthesis internally
-   - Use when users expect synthesized answers, not just ranked documents
+   - Use when users expect synthesized answers or conversational interactions, not just ranked documents
+   - This is a STANDALONE retrieval method - do not combine with other methods
 
 ## Your Responsibilities
 

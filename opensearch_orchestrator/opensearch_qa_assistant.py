@@ -4,7 +4,6 @@ import re
 
 from strands import Agent, tool
 from strands.models import BedrockModel
-<<<<<<< HEAD:opensearch_orchestrator/opensearch_qa_assistant.py
 if __package__ in {None, ""}:
     from pathlib import Path
     import sys
@@ -14,11 +13,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, _SCRIPT_EXECUTION_PROJECT_ROOT)
 
 from opensearch_orchestrator.scripts.handler import ThinkingCallbackHandler
-from opensearch_orchestrator.scripts.tools import read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, search_opensearch_org
-=======
-from scripts.handler import ThinkingCallbackHandler
-from scripts.tools import read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, read_agentic_search_guide, search_opensearch_org
->>>>>>> f802391 (Add agentic search support):opensearch_qa_assistant.py
+from opensearch_orchestrator.scripts.tools import read_knowledge_base, read_dense_vector_models, read_sparse_vector_models, read_agentic_search_guide, search_opensearch_org
 
 # -------------------------------------------------------------------------
 # System Prompt

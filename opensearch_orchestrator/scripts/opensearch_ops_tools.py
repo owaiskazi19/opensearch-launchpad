@@ -29,7 +29,7 @@ OPENSEARCH_AUTH_MODE_CUSTOM = "custom"
 OPENSEARCH_USER_ENV = "OPENSEARCH_USER"
 OPENSEARCH_PASSWORD_ENV = "OPENSEARCH_PASSWORD"
 OPENSEARCH_DEFAULT_USER = "admin"
-OPENSEARCH_DEFAULT_PASSWORD = "myStrongPassword123!"
+OPENSEARCH_DEFAULT_PASSWORD = "MyPassword123!"
 OPENSEARCH_DOCKER_IMAGE = os.getenv("OPENSEARCH_DOCKER_IMAGE", "opensearchproject/opensearch:latest")
 OPENSEARCH_DOCKER_CONTAINER = os.getenv("OPENSEARCH_DOCKER_CONTAINER", "opensearch-local")
 OPENSEARCH_DOCKER_START_TIMEOUT = int(os.getenv("OPENSEARCH_DOCKER_START_TIMEOUT", "120"))
@@ -3880,12 +3880,12 @@ def _search_ui_search(
                 "?",
             ]
             if any(indicator in query_lower for indicator in agentic_indicators):
-                # Use agentic search - just do a simple search, the pipeline will handle query translation
+                # Use agentic search with correct query format
                 executed_body = {
                     "size": size,
                     "query": {
-                        "match": {
-                            "_all": query
+                        "agentic": {
+                            "query_text": query
                         }
                     }
                 }
@@ -3895,6 +3895,10 @@ def _search_ui_search(
                 
                 try:
                     response = opensearch_client.search(index=index_name, body=executed_body)
+                    
+                    # Debug: Log the raw response
+                    print(f"[DEBUG] Agentic search response: {json.dumps(response, indent=2)}")
+                    
                     hits_out: list[dict] = []
                     for hit in response.get("hits", {}).get("hits", []):
                         source = hit.get("_source", {})
@@ -5793,6 +5797,99 @@ def create_bedrock_agentic_model(
                     "action_type": "predict",
                     "method": "POST",
                     "url": f"https://bedrock-runtime.{region}.amazonaws.com/model/{model_name}/converse",
+                    "headers": {
+                        "content-type": "application/json"
+                    },
+                    "request_body": '{ "system": [{"text": "${parameters.system_prompt}"}], "messages": [${parameters._chat_history:-}{"role":"user","content":[{"text":"${parameters.user_prompt}"}]}${parameters._interactions:-}]${parameters.tool_configs:-} }'
+                }
+            ]
+        }
+    }
+    
+    try:
+        opensearch_client = _create_client()
+        set_ml_settings(opensearch_client)
+        
+        # Single-step register and deploy
+        response = opensearch_client.transport.perform_request(
+            "POST", 
+            "/_plugins/_ml/models/_register?deploy=true", 
+            body=register_body
+        )
+        
+        model_id = response.get("model_id") or response.get("modelId")
+        if not model_id:
+            return f"Model registration failed - no model_id returned: {response}"
+        
+        print(f"Agentic model '{model_name}' (ID: {model_id}) registered and deployed successfully.")
+        return model_id
+
+    except Exception as e:
+        return f"Error creating Bedrock agentic model: {e}"
+
+
+def create_bedrock_agentic_model_with_creds(
+    access_key: str,
+    secret_key: str,
+    region: str = "us-east-1",
+    session_token: str = "",
+    model_name: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+) -> str:
+    """Create a Bedrock Claude model for agentic search with explicit AWS credentials.
+    
+    This function accepts AWS credentials as parameters instead of reading from environment variables.
+    Use this when credentials are provided by the orchestrator for agentic search setup.
+    
+    Args:
+        access_key: AWS Access Key ID
+        secret_key: AWS Secret Access Key
+        region: AWS region (default: us-east-1)
+        session_token: AWS Session Token (optional, for temporary credentials)
+        model_name: The Bedrock Claude model ID. Defaults to Claude 4 Sonnet.
+        
+    Returns:
+        str: The model ID of the created and deployed model, or error message.
+    """
+    # Validate inputs
+    if not access_key or not access_key.strip():
+        return "Error: AWS Access Key ID is required."
+    if not secret_key or not secret_key.strip():
+        return "Error: AWS Secret Access Key is required."
+    if not region or not region.strip():
+        return "Error: AWS region is required."
+    
+    # Validate model is a Claude model for agentic search
+    if "claude" not in model_name.lower():
+        return "Error: Agentic search requires a Claude model (e.g., us.anthropic.claude-sonnet-4-20250514-v1:0)."
+    
+    # Build credential configuration
+    credential_config = {
+        "access_key": access_key.strip(),
+        "secret_key": secret_key.strip()
+    }
+    if session_token and session_token.strip():
+        credential_config["session_token"] = session_token.strip()
+
+    # Use single-step register with deploy=true (simpler and more reliable)
+    register_body = {
+        "name": f"agentic-search-model-{int(time.time())}",
+        "function_name": "remote",
+        "connector": {
+            "name": f"Bedrock Claude 4 Sonnet Connector {int(time.time())}",
+            "description": "Amazon Bedrock connector for Claude 4 Sonnet - Agentic Search",
+            "version": 1,
+            "protocol": "aws_sigv4",
+            "parameters": {
+                "region": region.strip(),
+                "service_name": "bedrock",
+                "model": model_name
+            },
+            "credential": credential_config,
+            "actions": [
+                {
+                    "action_type": "predict",
+                    "method": "POST",
+                    "url": f"https://bedrock-runtime.{region.strip()}.amazonaws.com/model/{model_name}/converse",
                     "headers": {
                         "content-type": "application/json"
                     },
