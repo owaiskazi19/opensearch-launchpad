@@ -3897,7 +3897,8 @@ def _search_ui_search(
                     response = opensearch_client.search(index=index_name, body=executed_body)
                     
                     # Debug: Log the raw response
-                    print(f"[DEBUG] Agentic search response: {json.dumps(response, indent=2)}")
+                    if debug:
+                        print(f"[DEBUG] Agentic search response: {json.dumps(response, indent=2)}")
                     
                     hits_out: list[dict] = []
                     for hit in response.get("hits", {}).get("hits", []):

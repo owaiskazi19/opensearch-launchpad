@@ -797,8 +797,8 @@ def solution_planning_assistant(context: str) -> dict:
                         ),
                     }
                 
-                # For Agentic Search or when no capability verification needed, return directly
-                elif is_agentic_search or not capability_ids:
+                # For Agentic Search, return directly (no capability verification needed)
+                elif is_agentic_search:
                     return {
                         "solution": solution,
                         "search_capabilities": search_capabilities,

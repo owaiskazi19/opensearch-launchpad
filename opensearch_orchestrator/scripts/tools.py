@@ -97,18 +97,13 @@ def read_knowledge_base() -> str:
     """Read the OpenSearch Semantic Search Guide to retrieve detailed information about search methods.
 
     Returns:
-        str: The content of the guide covering BM25, Dense Vector, Sparse Vector, Hybrid, Agentic Search, algorithms (HNSW, IVF, etc.), cost profiles, and deployment options.
+        str: The content of the guide covering BM25, Dense Vector, Sparse Vector, Hybrid search, algorithms (HNSW, IVF, etc.), cost profiles, and deployment options.
     """
     try:
-        semantic_guide = _read_packaged_text_file(
+        return _read_packaged_text_file(
             *_KNOWLEDGE_PACKAGE_ROOT,
             "opensearch_semantic_search_guide.md",
         )
-        agentic_guide = _read_packaged_text_file(
-            *_KNOWLEDGE_PACKAGE_ROOT,
-            "agentic_search_guide.md",
-        )
-        return f"{semantic_guide}\n\n---\n\n{agentic_guide}"
     except Exception as e:
         return f"Error reading knowledge base: {e}"
 
@@ -150,12 +145,12 @@ def read_agentic_search_guide() -> str:
         str: The content of the guide covering agentic search setup, agent types, latency/cost profiles, and when to use agentic search as a complete retrieval solution for multi-step reasoning and answer synthesis.
     """
     try:
-        filename = "scripts/knowledge/agentic_search_guide.md"
-        with open(filename, "r", encoding="utf-8") as f:
-            return f.read()
+        return _read_packaged_text_file(
+            *_KNOWLEDGE_PACKAGE_ROOT,
+            "agentic_search_guide.md",
+        )
     except Exception as e:
         return f"Error reading agentic search guide: {e}"
-        return f"Error reading sparse vector models guide: {e}"
 
 
 
