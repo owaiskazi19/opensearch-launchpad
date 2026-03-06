@@ -3,23 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "opensearch-orchestrator"
-version = "0.2.7"
+name = "opensearch-launchpad"
+version = "0.1.1"
 description = "OpenSearch Solution Architect MCP server — guides you from requirements to a running search setup"
-readme = "readme.md"
+readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
+license-files = ["LICENSE.txt", "NOTICE.txt"]
 keywords = ["mcp", "opensearch", "search", "vector-search", "hybrid-search"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-]
+
 dependencies = [
     "anyio",
     "mcp",
@@ -40,19 +32,19 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SearchLearning/agent"
-Repository = "https://github.com/SearchLearning/agent"
-Issues = "https://github.com/SearchLearning/agent/issues"
+Homepage = "https://github.com/opensearch-project/opensearch-launchpad"
+Repository = "https://github.com/opensearch-project/opensearch-launchpad"
+Issues = "https://github.com/opensearch-project/opensearch-launchpad/issues"
 
 [project.scripts]
-opensearch-orchestrator = "opensearch_orchestrator.mcp_server:main"
+opensearch-launchpad = "opensearch_orchestrator.mcp_server:main"
 
 [tool.hatch.build]
 include = [
     "opensearch_orchestrator/**/*.py",
-    "opensearch_orchestrator/scripts/knowledge/*.md",
-    "opensearch_orchestrator/scripts/sample_data/*",
-    "opensearch_orchestrator/scripts/ui/search_builder/*",
+    "opensearch_orchestrator/knowledge/*.md",
+    "opensearch_orchestrator/sample_data/*",
+    "opensearch_orchestrator/ui/search_builder/*",
     "readme.md",
 ]
 
@@ -62,9 +54,9 @@ packages = ["opensearch_orchestrator"]
 [tool.hatch.build.targets.sdist]
 include = [
     "opensearch_orchestrator/**/*.py",
-    "opensearch_orchestrator/scripts/knowledge/*.md",
-    "opensearch_orchestrator/scripts/sample_data/*",
-    "opensearch_orchestrator/scripts/ui/search_builder/*",
+    "opensearch_orchestrator/knowledge/*.md",
+    "opensearch_orchestrator/sample_data/*",
+    "opensearch_orchestrator/ui/search_builder/*",
     "tests/**/*.py",
     "readme.md",
     "pyproject.toml",
