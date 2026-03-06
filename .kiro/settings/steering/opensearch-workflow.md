@@ -5,7 +5,7 @@ inclusion: always
 
 ## OpenSearch Search Builder — MCP Workflow
 
-You have access to the `opensearch-orchestrator` MCP server.
+You have access to the `opensearch-launchpad` MCP server.
 Follow these phases in order using its tools:
 
 ### Phase 1: Collect Sample Document

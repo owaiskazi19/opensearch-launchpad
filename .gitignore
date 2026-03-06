@@ -215,3 +215,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 test.ipynb
+
+# IDE-specific local config (not part of the repo)
+.cursor/
+local/

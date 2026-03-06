@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "opensearch-orchestrator": {
-      "command": "uv",
-      "args": ["run", "opensearch_orchestrator/mcp_server.py"],
-      "cwd": "/path/to/agent-poc"
-    }
-  }
-}

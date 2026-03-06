@@ -5,7 +5,7 @@ inclusion: auto
 
 ## OpenSearch Search Builder
 
-You have access to the `opensearch-orchestrator` MCP server via the `opensearch-search-builder` power.
+You have access to the `opensearch-launchpad` MCP server via the `opensearch-search-builder` power.
 
 When the user's request involves building a search application or OpenSearch architecture, activate the `opensearch-search-builder` power and follow its workflow phases in order.
 
