@@ -1,4 +1,4 @@
-# OpenSearch Launchpad
+# OpenSearch Orchestrator
 
 An MCP-powered assistant that guides you from initial requirements to a running OpenSearch search setup. It collects a sample document, gathers preferences, plans a search architecture, and executes the plan — creating indices, ML models, ingest pipelines, and a local search UI — with optional deployment to Amazon OpenSearch Service or Serverless.
 
@@ -6,9 +6,9 @@ An MCP-powered assistant that guides you from initial requirements to a running 
 
 ## Kiro Power (Primary Integration)
 
-OpenSearch Launchpad is packaged as a **Kiro Power**. Install it in Kiro by adding this repo as a power source. Kiro reads `POWER.md` for workflow instructions and calls MCP tools exposed by the server.
+OpenSearch Orchestrator is packaged as a **Kiro Power**. Install it in Kiro by adding this repo as a power source. Kiro reads `POWER.md` for workflow instructions and calls MCP tools exposed by the server.
 
-The `mcp.json` at the repo root runs `uvx opensearch-launchpad@latest` — no local clone required.
+The `mcp.json` at the repo root runs `uvx opensearch-orchestrator@latest` — no local clone required.
 
 ---
 
@@ -39,13 +39,13 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### Running from PyPI
 
 ```bash
-uvx opensearch-launchpad@latest
+uvx opensearch-orchestrator@latest
 ```
 
 If installed via `pip`:
 
 ```bash
-opensearch-launchpad
+opensearch-orchestrator
 ```
 
 > This starts a stdio MCP server (JSON-RPC), not an interactive CLI. Launch it from an MCP client. For an interactive terminal session, use `python opensearch_orchestrator/orchestrator.py` instead.
@@ -65,9 +65,9 @@ uv run opensearch_orchestrator/mcp_server.py
 ```json
 {
   "mcpServers": {
-    "opensearch-launchpad": {
+    "opensearch-orchestrator": {
       "command": "uvx",
-      "args": ["opensearch-launchpad@latest"]
+      "args": ["opensearch-orchestrator@latest"]
     }
   }
 }
@@ -90,7 +90,7 @@ pip install mcp opensearch-py
 ```json
 {
   "mcpServers": {
-    "opensearch-launchpad": {
+    "opensearch-orchestrator": {
       "command": "python3",
       "args": ["opensearch_orchestrator/mcp_server.py"],
       "cwd": "/path/to/agent"
@@ -164,8 +164,8 @@ python -c "import opensearch_orchestrator.mcp_server as m; print(hasattr(m, 'mai
 
 # Smoke-test the wheel
 VERSION="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-WHEEL_PATH="$(ls dist/opensearch_launchpad-${VERSION}-*.whl 2>/dev/null || ls dist/opensearch_orchestrator-${VERSION}-*.whl)"
-uvx --from "$WHEEL_PATH" opensearch-launchpad
+WHEEL_PATH="$(ls dist/opensearch_orchestrator-${VERSION}-*.whl)"
+uvx --from "$WHEEL_PATH" opensearch-orchestrator
 
 # 4) Publish to PyPI
 uv publish --token pypi-YOUR-TOKEN

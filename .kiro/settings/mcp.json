@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "opensearch-launchpad": {
+    "opensearch-orchestrator": {
       "command": "/bin/bash",
       "args": [
         "-l",

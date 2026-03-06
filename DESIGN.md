@@ -4,7 +4,7 @@
 
 This system is an MCP-powered assistant that guides users from initial requirements to a running OpenSearch search setup. It collects a sample document, gathers preferences (budget, performance, query pattern), plans a search architecture using an AI planner agent, and executes the plan to create indices, ML models, ingest pipelines, and a local search UI — with optional deployment to Amazon OpenSearch Service or Serverless.
 
-The system is delivered as a **Kiro Power** (`POWER.md` + `mcp.json`) backed by a published Python MCP server package (`opensearch-launchpad` on PyPI).
+The system is delivered as a **Kiro Power** (`POWER.md` + `mcp.json`) backed by a published Python MCP server package (`opensearch-orchestrator` on PyPI).
 
 ---
 
@@ -14,7 +14,7 @@ The system is delivered as a **Kiro Power** (`POWER.md` + `mcp.json`) backed by 
 
 | Mode | How it runs |
 |------|-------------|
-| **Kiro Power (published)** | `mcp.json` runs `uvx opensearch-launchpad@latest` |
+| **Kiro Power (published)** | `mcp.json` runs `uvx opensearch-orchestrator@latest` |
 | **Local dev** | `.kiro/settings/mcp.json` runs `uv run opensearch_orchestrator/mcp_server.py` |
 
 The Kiro AI reads `POWER.md` for workflow instructions and calls MCP tools exposed by `mcp_server.py` over stdio.
@@ -124,5 +124,5 @@ The workflow is driven by the Kiro AI reading `POWER.md`. Each phase calls speci
 | Planning/execution model | Claude Sonnet (extended thinking enabled) |
 | OpenSearch client | `opensearch-py` |
 | Package manager | `uv` / `uvx` |
-| Distribution | PyPI (`opensearch-launchpad`) |
+| Distribution | PyPI (`opensearch-orchestrator`) |
 | IDE integration | Kiro Power (`POWER.md` + `mcp.json`) |

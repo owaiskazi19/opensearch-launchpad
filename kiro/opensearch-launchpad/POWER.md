@@ -1,6 +1,6 @@
 ---
-name: "opensearch-launchpad"
-displayName: "OpenSearch Launchpad"
+name: "opensearch-orchestrator"
+displayName: "OpenSearch Orchestrator"
 description: "Accelerate proof-of-concept search applications with guided, end-to-end architecture planning. Ingests sample documents, captures preferences, designs the solution architecture, provisions indices, ML models, ingest pipelines, and a search UI locally, then deploys to Amazon OpenSearch Service or Amazon OpenSearch Serverless."
 keywords: ["opensearch", "search", "semantic search", "vector search", "hybrid search", "RAG", "embeddings", "knn", "neural search", "BM25", "index", "search architecture", "Amazon OpenSearch", "aws", "serverless", "Amazon OpenSearch Serverless"]
 author: "AWS"
@@ -28,9 +28,9 @@ Before starting Phase 5, add the required MCP servers to your power configuratio
 ```json
 {
   "mcpServers": {
-    "opensearch-launchpad": {
+    "opensearch-orchestrator": {
       "command": "uvx",
-      "args": ["opensearch-launchpad@latest"],
+      "args": ["opensearch-orchestrator@latest"],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       },
@@ -145,15 +145,15 @@ If `which docker` returns `/usr/local/bin/docker`, add `/usr/local/bin` to
 `env.PATH` in your MCP config.
 
 1. Open the Command Palette in Kiro (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux), then run `Kiro: Open user MCP config (JSON)` (or open workspace MCP config).
-2. In `mcpServers`, find the namespaced server entry (for example, `power-kiro-power-opensearch-launchpad`) and update it to match the example below:
+2. In `mcpServers`, find the namespaced server entry (for example, `power-kiro-power-opensearch-orchestrator`) and update it to match the example below:
 
 ```jsonc
 {
   "mcpServers": {
-    "opensearch-launchpad": {
+    "opensearch-orchestrator": {
       "command": "uvx",
       "args": [
-        "opensearch-launchpad@latest"
+        "opensearch-orchestrator@latest"
       ],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR",
@@ -171,7 +171,7 @@ If `which docker` returns `/usr/local/bin/docker`, add `/usr/local/bin` to
    - Go to `View` -> `Open View`
    - Type `MCP Servers`
    - Open the MCP Server view
-   - Retry connect to `power-kiro-power-opensearch-launchpad`
+   - Retry connect to `power-kiro-power-opensearch-orchestrator`
 
 
 ## Quick Test

@@ -3,10 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "opensearch-launchpad"
-version = "0.2.5"
+name = "opensearch-orchestrator"
+version = "0.2.9"
 description = "OpenSearch Solution Architect MCP server — guides you from requirements to a running search setup"
-readme = "readme.md"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["mcp", "opensearch", "search", "vector-search", "hybrid-search"]
@@ -40,12 +40,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SearchLearning/agent"
-Repository = "https://github.com/SearchLearning/agent"
-Issues = "https://github.com/SearchLearning/agent/issues"
+Homepage = "https://github.com/owaiskazi19/opensearch-launchpad"
+Repository = "https://github.com/owaiskazi19/opensearch-launchpad"
+Issues = "https://github.com/owaiskazi19/opensearch-launchpad/issues"
 
 [project.scripts]
-opensearch-launchpad = "opensearch_orchestrator.mcp_server:main"
+opensearch-orchestrator = "opensearch_orchestrator.mcp_server:main"
 
 [tool.hatch.build]
 include = [
@@ -53,7 +53,7 @@ include = [
     "opensearch_orchestrator/knowledge/*.md",
     "opensearch_orchestrator/sample_data/*",
     "opensearch_orchestrator/ui/search_builder/*",
-    "readme.md",
+    "README.md",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -66,6 +66,6 @@ include = [
     "opensearch_orchestrator/sample_data/*",
     "opensearch_orchestrator/ui/search_builder/*",
     "tests/**/*.py",
-    "readme.md",
+    "README.md",
     "pyproject.toml",
 ]
