@@ -63,6 +63,7 @@ class _FakeLocalhostClient:
         return self._search_response
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-style path expansion")
 def test_extract_path_candidate_strips_sentence_trailing_period(tmp_path, monkeypatch):
     home = tmp_path / "home"
     downloads = home / "Downloads"
@@ -77,6 +78,7 @@ def test_extract_path_candidate_strips_sentence_trailing_period(tmp_path, monkey
     assert detected == str(data_file)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-style path expansion")
 def test_extract_path_candidate_supports_quoted_absolute_path_with_spaces(tmp_path):
     data_file = tmp_path / "title basics.tsv"
     data_file.write_text("id\ttitle\n1\tTest\n", encoding="utf-8")
@@ -87,6 +89,7 @@ def test_extract_path_candidate_supports_quoted_absolute_path_with_spaces(tmp_pa
     assert detected == str(data_file)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-style path expansion")
 def test_submit_sample_doc_from_local_file_accepts_sentence_style_path(tmp_path, monkeypatch):
     home = tmp_path / "home"
     downloads = home / "Downloads"
